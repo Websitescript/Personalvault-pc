@@ -315,7 +315,7 @@ class ViewerDialog(QDialog):
         self.info.setStyleSheet(f"color:{THEME.muted};")
         bar.addWidget(self.info)
         bar.addStretch(1)
-        for text, fn in (("Open with…", self._open), ("Copy file", self._copy), ("Save a copy…", self._save)):
+        for text, fn in (("Open with…", self._open), ("Copy file", self._copy), ("Save a copy…", self._save), ("Share as images…", self._images)):
             b = QToolButton()
             b.setText(text)
             b.clicked.connect(fn)
@@ -395,6 +395,11 @@ class ViewerDialog(QDialog):
 
     def _save(self):
         save_copy(self, self.store.path_of(self.doc), self.doc.title)
+
+    def _images(self):
+        win = self.parent()
+        if hasattr(win, "share_as_images"):
+            win.share_as_images([self.doc])
 
     def done(self, r):
         if self.pdf:
@@ -607,3 +612,49 @@ class SettingsDialog(QDialog):
         l = QLabel(text)
         l.setStyleSheet(f"color:{THEME.accent};font-weight:600;margin-top:6px;")
         return l
+
+
+class ImagesResultDialog(QDialog):
+    def __init__(self, files: list, parent=None):
+        super().__init__(parent)
+        self.files = [Path(f) for f in files]
+        self.setWindowTitle("Images ready")
+        self.setMinimumWidth(460)
+        lay = QVBoxLayout(self)
+        n = len(self.files)
+        names = "<br>".join(f.name for f in self.files[:6]) + (f"<br>… and {n - 6} more" if n > 6 else "")
+        lay.addWidget(QLabel(f"<b>{n} image{'s' if n != 1 else ''} ready</b><br>"
+                             f"<span style='color:{THEME.muted}'>{names}</span>"))
+        lay.addWidget(QLabel("Choose how to share them:"))
+        btns = [("Copy image files (paste into WhatsApp, Gmail, Explorer)", self._copy_files)]
+        if n == 1:
+            btns.append(("Copy as picture (paste inline into a chat or document)", self._copy_picture))
+        btns += [("Save to a folder…", self._save), ("Show in folder", self._show)]
+        for text, fn in btns:
+            b = QPushButton(text)
+            b.clicked.connect(fn)
+            lay.addWidget(b)
+        done = QPushButton("Done")
+        done.setObjectName("primary")
+        done.clicked.connect(self.accept)
+        lay.addWidget(done)
+
+    def _copy_files(self):
+        md = QMimeData()
+        md.setUrls([QUrl.fromLocalFile(str(f)) for f in self.files])
+        QGuiApplication.clipboard().setMimeData(md)
+        QMessageBox.information(self, APP_NAME, "Copied. Paste them where you want to share them.")
+
+    def _copy_picture(self):
+        from PySide6.QtGui import QImage
+        QGuiApplication.clipboard().setImage(QImage(str(self.files[0])))
+        QMessageBox.information(self, APP_NAME, "Copied as a picture.")
+
+    def _save(self):
+        d = QFileDialog.getExistingDirectory(self, "Save images to", str(Path.home() / "Downloads"))
+        if d:
+            for f in self.files:
+                shutil.copyfile(f, Path(d) / f.name)
+
+    def _show(self):
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.files[0].parent)))

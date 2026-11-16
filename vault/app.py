@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QLabel, QLineEdit, QLi
                                QVBoxLayout, QSizePolicy)
 
 from . import APP_NAME, VERSION, pdfutil
-from .dialogs import (ACCEPT_EXT, DocDialog, MergeDialog, MergeResultDialog, RevealDialog, SettingsDialog,
+from .dialogs import (ACCEPT_EXT, DocDialog, ImagesResultDialog, MergeDialog, MergeResultDialog, RevealDialog, SettingsDialog,
                       ViewerDialog, copy_file_to_clipboard, readable_copy, save_copy, temp_dir)
 from .models import TYPES, Doc, matches
 from .theme import THEME
@@ -78,11 +78,21 @@ class MainWindow(QMainWindow):
         self.act_add = QAction("＋  Add document", self)
         self.act_add.setShortcut(QKeySequence.New)
         self.act_add.triggered.connect(self.add_dialog)
-        self.act_merge = QAction("Merge && share", self)
+        self.act_merge = QAction("Merge selected into one PDF…", self)
         self.act_merge.setShortcut("Ctrl+M")
         self.act_merge.triggered.connect(self.merge_selected)
+        self.act_images = QAction("Selected as images (JPG)…", self)
+        self.act_images.setShortcut("Ctrl+Shift+I")
+        self.act_images.triggered.connect(lambda: self.share_as_images([d for d in (self.doc(i) for i in self.sel) if d]))
         tb.addAction(self.act_add)
-        tb.addAction(self.act_merge)
+        share_btn = QToolButton()
+        share_btn.setText("Share  ▾")
+        share_btn.setPopupMode(QToolButton.InstantPopup)
+        share_menu = QMenu(share_btn)
+        share_menu.addAction(self.act_merge)
+        share_menu.addAction(self.act_images)
+        share_btn.setMenu(share_menu)
+        tb.addWidget(share_btn)
         sp = QWidget()
         sp.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         tb.addWidget(sp)
@@ -243,7 +253,7 @@ class MainWindow(QMainWindow):
         if self.sel:
             msg += f"   •   {len(self.sel)} selected"
             if len(self.sel) > 1:
-                msg += "   •   Ctrl+M to merge & share"
+                msg += "   •   Share ▾ to merge or send as images"
         else:
             msg += "   •   double-click to open, right-click for more, Ctrl+click to select several"
         self.statusBar().showMessage(msg)
@@ -367,6 +377,42 @@ class MainWindow(QMainWindow):
         QApplication.restoreOverrideCursor()
         MergeResultDialog(out, self).exec()
 
+    def share_as_images(self, docs: list):
+        docs = [d for d in docs if d]
+        if not docs:
+            QMessageBox.information(self, APP_NAME, "Select one or more documents first.")
+            return
+        out_dir = temp_dir() / ("images_" + datetime.now().strftime("%H%M%S%f"))
+        files: list = []
+        used: set = set()
+        current = docs[0]
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            for d in docs:
+                current = d
+                if len(files) >= 40:
+                    break
+                base = "".join(c for c in d.title if c.isalnum() or c in " _-").strip() or "document"
+                name, k = base, 2
+                while name.lower() in used:
+                    name, k = f"{base} ({k})", k + 1
+                used.add(name.lower())
+                files += pdfutil.export_jpegs(self.store.path_of(d), d.password, name, out_dir, 1600, 40 - len(files))
+        except pdfutil.NeedPassword:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.warning(self, APP_NAME, f"“{current.title}” is password-protected.\nOpen it once and enter its password "
+                                "(tick “Remember for this card”), then try again.")
+            return
+        except Exception as ex:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.warning(self, APP_NAME, f"Couldn't turn the documents into images.\n\n{ex}")
+            return
+        QApplication.restoreOverrideCursor()
+        if not files:
+            QMessageBox.information(self, APP_NAME, "Nothing to share.")
+            return
+        ImagesResultDialog(files, self).exec()
+
     def do_backup(self):
         name = f"PersonalVault-backup-{datetime.now().strftime('%Y%m%d')}.zip"
         f, _ = QFileDialog.getSaveFileName(self, "Create backup", str(Path.home() / "Downloads" / name), "Backup (*.zip)")
@@ -403,7 +449,10 @@ class MainWindow(QMainWindow):
             m.addAction("Copy ID number", lambda: QGuiApplication.clipboard().setText(d.number))
         m.addSeparator()
         if len(self.sel) > 1:
-            m.addAction(f"Merge && share {len(self.sel)} documents…", self.merge_selected)
+            m.addAction(f"Merge {len(self.sel)} documents into one PDF…", self.merge_selected)
+            m.addAction(f"Share {len(self.sel)} documents as images…", self.act_images.trigger)
+        else:
+            m.addAction("Share as images (JPG)…", lambda: self.share_as_images([d]))
         m.addAction("Edit…", lambda: self.edit_doc(doc_id))
         sub = m.addMenu("Move")
         sub.addAction("Up", lambda: self.move(doc_id, -1))

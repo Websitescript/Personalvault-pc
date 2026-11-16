@@ -128,3 +128,24 @@ def merge_to_a4(items: list[tuple[object, str, str]], out) -> None:
         for s in srcs:
             s.close()
         dest.close()
+
+
+def export_jpegs(path, password: str, name: str, out_dir, width_px: int = 1600, max_pages: int = 40) -> list:
+    """Every page (up to max_pages) as a JPEG in out_dir. One page -> '<name>.jpg', else '<name> - page N.jpg'."""
+    from pathlib import Path
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    d = open_pdf(path, password)          # may raise NeedPassword
+    files = []
+    try:
+        n = min(len(d), max_pages)
+        for i in range(n):
+            r = d[i].rect
+            z = width_px / max(r.width, 1)
+            pix = d[i].get_pixmap(matrix=fitz.Matrix(z, z), alpha=False)
+            f = out_dir / (f"{name}.jpg" if len(d) == 1 else f"{name} - page {i + 1}.jpg")
+            pix.save(str(f), jpg_quality=90)
+            files.append(f)
+    finally:
+        d.close()
+    return files

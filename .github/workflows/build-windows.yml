@@ -25,5 +25,5 @@ jobs:
           main.py
       - uses: actions/upload-artifact@v4
         with:
-          name: PersonalVault-Windows-V1.0
+          name: PersonalVault-Windows-V1.1
           path: dist/PersonalVault.exe

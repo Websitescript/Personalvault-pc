@@ -1,4 +1,4 @@
-# Personal Vault for Windows — V1.0 (portable)
+# Personal Vault for Windows — V1.1 (portable)
 
 One file, no installation: `PersonalVault.exe`. Your data lives in a `PersonalVaultData` folder next to the exe
 (copy both to a USB stick and it travels with you).
@@ -14,7 +14,7 @@ Push this folder to GitHub (main) -> Actions -> "Build Windows portable app" -> 
 Card stack · Cards · List · Tiles · Large icons (real page thumbnails) · Details (sortable columns)
 
 ## Handy keys
-Ctrl+N add · Ctrl+F search · Ctrl+M merge & share · Ctrl+click / Shift+click select several ·
+Ctrl+N add · Ctrl+F search · Ctrl+M merge · Ctrl+Shift+I share as images · Ctrl+click / Shift+click select several ·
 Enter open · Space reveal card · Delete remove · drag a card to reorder (card views)
 
 ## Backup compatibility
